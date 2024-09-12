@@ -37,7 +37,7 @@ class BSQLI:
         """
         return random.choice(self.USER_AGENTS)
 
-    def perform_request(self, url, payload, cookie):
+    def perform_request(self, url, payload, cookie, custom_headers):
         """
         Perform a GET request with the given URL, payload, and cookie.
         Returns a tuple containing:
@@ -54,6 +54,9 @@ class BSQLI:
             'User-Agent': self.get_random_user_agent()
         }
 
+        if custom_headers:
+            headers.update(custom_headers)
+
         try:
             response = requests.get(url_with_payload, headers=headers, cookies={'cookie': cookie} if cookie else None)
             response.raise_for_status()
@@ -66,6 +69,23 @@ class BSQLI:
             error_message = str(e)
 
         return success, url_with_payload, response_time, response.status_code if success else None, error_message
+
+    def parse_custom_headers(self):
+        """
+        Prompts the user to input custom headers and returns them as a dictionary.
+        """
+        custom_headers = {}
+        while True:
+            header_input = input(Color.PURPLE + "Enter a custom header (key:value) or press enter if none: " + Color.RESET).strip()
+            if not header_input:
+                break
+            try:
+                key, value = header_input.split(":", 1)
+                custom_headers[key.strip()] = value.strip()
+            except ValueError:
+                print(f"{Color.RED}Invalid format. Please use the format: key:value{Color.RESET}")
+        
+        return custom_headers
 
     def read_file(self, path):
         """
@@ -128,6 +148,9 @@ class BSQLI:
         # Input for cookie
         cookie = input(Color.CYAN + "Enter the cookie to include in the GET request (leave empty if none): " + Color.RESET).strip()
 
+        # Input for custom headers
+        custom_headers = self.parse_custom_headers()
+
         # Input for number of concurrent threads
         threads_input = input(Color.CYAN + "Enter the number of concurrent threads (0-10, leave empty for default 0): " + Color.RESET).strip()
         try:
@@ -145,7 +168,7 @@ class BSQLI:
                 for url in urls:
                     for payload in payloads:
                         self.total_tests += 1
-                        success, url_with_payload, response_time, status_code, error_message = self.perform_request(url, payload, cookie)
+                        success, url_with_payload, response_time, status_code, error_message = self.perform_request(url, payload, cookie, custom_headers)
                         if success and status_code and response_time >= 10:
                             self.vulnerabilities_found += 1
                             self.vulnerable_urls.append(url_with_payload)
@@ -159,7 +182,7 @@ class BSQLI:
 
             else:
                 with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
-                    futures = [executor.submit(self.perform_request, url, payload, cookie) for url in urls for payload in payloads]
+                    futures = [executor.submit(self.perform_request, url, payload, cookie, custom_headers) for url in urls for payload in payloads]
                     for future in concurrent.futures.as_completed(futures):
                         self.total_tests += 1
                         success, url_with_payload, response_time, status_code, error_message = future.result()
